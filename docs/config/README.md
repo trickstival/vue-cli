@@ -31,17 +31,21 @@ module.exports = {
 
 ### baseUrl
 
+Deprecated since Vue CLI 3.3, please use [`publicPath`](#publicPath) instead.
+
+### publicPath
+
 - Type: `string`
 - Default: `'/'`
 
-  The base URL your application bundle will be deployed at. This is the equivalent of webpack's `output.publicPath`, but Vue CLI also needs this value for other purposes, so you should **always use `baseUrl` instead of modifying webpack `output.publicPath`**.
+  The base URL your application bundle will be deployed at (known as `baseUrl` before Vue CLI 3.3). This is the equivalent of webpack's `output.publicPath`, but Vue CLI also needs this value for other purposes, so you should **always use `publicPath` instead of modifying webpack `output.publicPath`**.
 
-  By default, Vue CLI assumes your app will be deployed at the root of a domain, e.g. `https://www.my-app.com/`. If your app is deployed at a sub-path, you will need to specify that sub-path using this option. For example, if your app is deployed at `https://www.foobar.com/my-app/`, set `baseUrl` to `'/my-app/'`.
+  By default, Vue CLI assumes your app will be deployed at the root of a domain, e.g. `https://www.my-app.com/`. If your app is deployed at a sub-path, you will need to specify that sub-path using this option. For example, if your app is deployed at `https://www.foobar.com/my-app/`, set `publicPath` to `'/my-app/'`.
 
   The value can also be set to an empty string (`''`) or a relative path (`./`) so that all assets are linked using relative paths. This allows the built bundle to be deployed under any public path, or used in a file system based environment like a Cordova hybrid app.
 
-  ::: warning Limitations of relative baseUrl
-  Relative `baseUrl` has some limitations and should be avoided when:
+  ::: warning Limitations of relative publicPath
+  Relative `publicPath` has some limitations and should be avoided when:
 
   - You are using HTML5 `history.pushState` routing;
 
@@ -52,7 +56,7 @@ module.exports = {
 
   ``` js
   module.exports = {
-    baseUrl: process.env.NODE_ENV === 'production'
+    publicPath: process.env.NODE_ENV === 'production'
       ? '/production-sub-path/'
       : '/'
   }
@@ -136,14 +140,16 @@ module.exports = {
 
 ### lintOnSave
 
-- Type: `boolean | 'error'`
+- Type: `boolean | 'warning' | 'default' | 'error'`
 - Default: `true`
 
   Whether to perform lint-on-save during development using [eslint-loader](https://github.com/webpack-contrib/eslint-loader). This value is respected only when [`@vue/cli-plugin-eslint`](https://github.com/vuejs/vue-cli/tree/dev/packages/%40vue/cli-plugin-eslint) is installed.
 
-  When set to `true`, `eslint-loader` will emit lint errors as warnings. By default, warnings are only logged to the terminal and does not fail the compilation.
+  When set to `true` or `'warning'`, `eslint-loader` will emit lint errors as warnings. By default, warnings are only logged to the terminal and does not fail the compilation, so this is a good default for development.
 
-  To make lint errors show up in the browser overlay, you can use `lintOnSave: 'error'`. This will force `eslint-loader` to always emit errors. this also means lint errors will now cause the compilation to fail.
+  To make lint errors show up in the browser overlay, you can use `lintOnSave: 'default'`. This will force `eslint-loader` to actually emit errors. this also means lint errors will now cause the compilation to fail.
+
+  Setting it to `'errors'` will force eslint-loader to emit warnings as errors as well, which means warnings will also show up in the overlay.
 
   Alternatively, you can configure the overlay to display both warnings and errors:
 
@@ -183,6 +189,14 @@ module.exports = {
 - Default: `[]`
 
   By default `babel-loader` ignores all files inside `node_modules`. If you want to explicitly transpile a dependency with Babel, you can list it in this option.
+
+::: warning Jest config
+This option is not respected by the [cli-unit-jest plugin](#jest), because in jest, we don't have to transpile code from `/node_modules` unless it uses non-standard features - Node >8.11 supports the latest ECMAScript features already.
+
+However, jest sometimes has to transform content from node_modules if that code uses ES6 `import`/`export` syntax. In that case, use the `transformIgnorePatterns` option in `jest.config.js`.
+
+See [the plugin's README](https://github.com/vuejs/vue-cli/blob/dev/packages/%40vue/cli-plugin-unit-jest/README.md) for more information.
+:::
 
 ### productionSourceMap
 
@@ -304,7 +318,7 @@ module.exports = {
 
   - Some values like `host`, `port` and `https` may be overwritten by command line flags.
 
-  - Some values like `publicPath` and `historyApiFallback` should not be modified as they need to be synchronized with [baseUrl](#baseurl) for the dev server to function properly.
+  - Some values like `publicPath` and `historyApiFallback` should not be modified as they need to be synchronized with [publicPath](#baseurl) for the dev server to function properly.
 
 ### devServer.proxy
 
@@ -330,12 +344,12 @@ module.exports = {
   module.exports = {
     devServer: {
       proxy: {
-        '/api': {
+        '^/api': {
           target: '<url>',
           ws: true,
           changeOrigin: true
         },
-        '/foo': {
+        '^/foo': {
           target: '<other_url>'
         }
       }

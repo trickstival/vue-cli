@@ -27,6 +27,8 @@ How to do a release:
 6. Go to GitHub releases page and publish the release (this is required for
    the release to show up in the issue helper)
 
+Note: eslint-config-* packages should be released separately & manually.
+
 */
 
 process.env.VUE_CLI_RELEASE = true
@@ -35,7 +37,7 @@ const execa = require('execa')
 const semver = require('semver')
 const inquirer = require('inquirer')
 const { syncDeps } = require('./syncDeps')
-const { buildEditorConfig } = require('./buildEditorConfig')
+// const { buildEditorConfig } = require('./buildEditorConfig')
 
 const curVersion = require('../lerna.json').version
 
@@ -81,21 +83,55 @@ const release = async () => {
     })
     delete process.env.PREFIX
 
-    buildEditorConfig()
+    // buildEditorConfig()
 
-    await execa('git', ['add', '-A'], { stdio: 'inherit' })
-    await execa('git', ['commit', '-m', 'chore: pre release sync'], { stdio: 'inherit' })
+    try {
+      await execa('git', ['add', '-A'], { stdio: 'inherit' })
+      await execa('git', ['commit', '-m', 'chore: pre release sync'], { stdio: 'inherit' })
+    } catch (e) {
+      // if it's a patch release, there may be no local deps to sync
+    }
   }
 
-  await execa(require.resolve('lerna/bin/lerna'), [
-    'publish',
-    '--repo-version',
-    version,
-    '--force-publish',
-    '*'
-  ], { stdio: 'inherit' })
+  const releaseType = semver.diff(curVersion, version)
 
-  require('./genChangelog')(version)
+  let distTag = 'latest'
+  if (releaseType.startsWith('pre')) {
+    distTag = 'next'
+  }
+
+  const lernaArgs = [
+    'publish',
+    version,
+    '--dist-tag',
+    distTag
+  ]
+  // keep packages' minor version in sync
+  if (releaseType !== 'patch') {
+    lernaArgs.push('--force-publish')
+  }
+
+  await execa(require.resolve('lerna/cli'), lernaArgs, { stdio: 'inherit' })
+
+  // publish version marker after all other packages are published
+  await execa(
+    'npm',
+    [
+      'publish',
+      '--tag',
+      distTag,
+      // must specify registry url: https://github.com/lerna/lerna/issues/896#issuecomment-311894609
+      '--registry',
+      'https://registry.npmjs.org/'
+    ],
+    {
+      stdio: 'inherit',
+      cwd: require('path').resolve(
+        __dirname,
+        '../packages/vue-cli-version-marker'
+      )
+    }
+  )
 }
 
 release().catch(err => {

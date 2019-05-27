@@ -2,6 +2,12 @@
 
 > pwa plugin for vue-cli
 
+The service worker added with this plugin is only enabled in the production environment (e.g. only if you run `npm run build` or `yarn build`). Enabling service worker in a development mode is not a recommended practice, because it can lead to the situation when previously cached assets are used and the latest local changes are not included.
+
+Instead, in the development mode the `noopServiceWorker.js` is included. This service worker file is effectively a 'no-op' that will reset any previous service worker registered for the same host:port combination.
+
+If you need to test a service worker locally, build the application and run a simple HTTP-server from your build directory. It's recommended to use a browser incognito window to avoid complications with your browser cache.
+
 ## Configuration
 
 Configuration is handled via the `pwa` property of either the `vue.config.js`
@@ -54,7 +60,7 @@ file, or the `"vue"` field in `package.json`.
   - Default: `'default'`
 
 - **pwa.assetsVersion**
-  
+
   - Default: `''`
 
     This option is used if you need to add a version to your icons and manifest, against browser’s cache. This will append `?v=<pwa.assetsVersion>` to the URLs of the icons and manifest.
@@ -64,6 +70,19 @@ file, or the `"vue"` field in `package.json`.
   - Default: `'manifest.json'`
 
     The path of app’s manifest.
+
+- **pwa.manifestOptions**
+
+  - Default: `{}`
+
+    The object will be used to generate the `manifest.json`
+
+    If the following attributes are not defined in the object, the options of `pwa` or default options will be used instead.
+      - name: `pwa.name`
+      - short_name: `pwa.name`
+      - start_url: `'.'`
+      - display: `'standalone'`
+      - theme_color: `pwa.themeColor`
 
 - **pwa.iconPaths**
 

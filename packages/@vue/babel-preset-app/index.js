@@ -3,16 +3,19 @@ const path = require('path')
 const defaultPolyfills = [
   // promise polyfill alone doesn't work in IE,
   // needs this as well. see: #1642
-  'es6.array.iterator',
+  'es.array.iterator',
   // this is required for webpack code splitting, vuex etc.
-  'es6.promise',
+  'es.promise',
+  // this is needed for object rest spread support in templates
+  // as vue-template-es2015-compiler 1.8+ compiles it to Object.assign() calls.
+  'es.object.assign',
   // #2012 es6.promise replaces native Promise in FF and causes missing finally
-  'es7.promise.finally'
+  'es.promise.finally'
 ]
 
 function getPolyfills (targets, includes, { ignoreBrowserslistConfig, configPath }) {
   const { isPluginRequired } = require('@babel/preset-env')
-  const builtInsList = require('@babel/preset-env/data/built-ins.json')
+  const builtInsList = require('core-js-compat/data')
   const getTargets = require('@babel/preset-env/lib/targets-parser').default
   const builtInTargets = getTargets(targets, {
     ignoreBrowserslistConfig,
@@ -27,17 +30,14 @@ function getPolyfills (targets, includes, { ignoreBrowserslistConfig, configPath
 module.exports = (context, options = {}) => {
   const presets = []
   const plugins = []
+  const defaultEntryFiles = JSON.parse(process.env.VUE_CLI_ENTRY_FILES || '[]')
 
   // JSX
   if (options.jsx !== false) {
-    plugins.push(
-      require('@babel/plugin-syntax-jsx'),
-      require('babel-plugin-transform-vue-jsx')
-      // require('babel-plugin-jsx-event-modifiers'),
-      // require('babel-plugin-jsx-v-model')
-    )
+    presets.push([require('@vue/babel-preset-jsx'), typeof options.jsx === 'object' ? options.jsx : {}])
   }
 
+  const runtimePath = path.dirname(require.resolve('@babel/runtime/package.json'))
   const {
     polyfills: userPolyfills,
     loose = false,
@@ -52,7 +52,18 @@ module.exports = (context, options = {}) => {
     exclude,
     shippedProposals,
     forceAllTransforms,
-    decoratorsLegacy
+    decoratorsBeforeExport,
+    decoratorsLegacy,
+    // entry file list
+    entryFiles = defaultEntryFiles,
+
+    // Undocumented option of @babel/plugin-transform-runtime.
+    // When enabled, an absolute path is used when importing a runtime helper atfer tranforming.
+    // This ensures the transpiled file always use the runtime version required in this package.
+    // However, this may cause hash inconsitency if the project is moved to another directory.
+    // So here we allow user to explicit disable this option if hash consistency is a requirement
+    // and the runtime version is sure to be correct.
+    absoluteRuntime = runtimePath
   } = options
 
   // resolve targets
@@ -96,12 +107,16 @@ module.exports = (context, options = {}) => {
       ignoreBrowserslistConfig,
       configPath
     })
-    plugins.push([require('./polyfillsPlugin'), { polyfills }])
+    plugins.push([
+      require('./polyfillsPlugin'),
+      { polyfills, entryFiles, useAbsolutePath: !!absoluteRuntime }
+    ])
   } else {
     polyfills = []
   }
 
   const envOptions = {
+    corejs: 3,
     spec,
     loose,
     debug,
@@ -124,25 +139,48 @@ module.exports = (context, options = {}) => {
   }
 
   // pass options along to babel-preset-env
-  presets.push([require('@babel/preset-env'), envOptions])
+  presets.unshift([require('@babel/preset-env'), envOptions])
 
   // additional <= stage-3 plugins
   // Babel 7 is removing stage presets altogether because people are using
   // too many unstable proposals. Let's be conservative in the defaults here.
   plugins.push(
     require('@babel/plugin-syntax-dynamic-import'),
-    [require('@babel/plugin-proposal-decorators'), { legacy: decoratorsLegacy !== false }],
+    [require('@babel/plugin-proposal-decorators'), {
+      decoratorsBeforeExport,
+      legacy: decoratorsLegacy !== false
+    }],
     [require('@babel/plugin-proposal-class-properties'), { loose }],
   )
 
   // transform runtime, but only for helpers
   plugins.push([require('@babel/plugin-transform-runtime'), {
     regenerator: useBuiltIns !== 'usage',
-    corejs: useBuiltIns !== false ? false : 2,
+
+    // polyfills are injected by preset-env & polyfillsPlugin, so no need to add them again
+    corejs: false,
+
     helpers: useBuiltIns === 'usage',
     useESModules: !process.env.VUE_CLI_BABEL_TRANSPILE_MODULES,
-    absoluteRuntime: path.dirname(require.resolve('@babel/runtime/package.json'))
+
+    absoluteRuntime
   }])
+
+  // use @babel/runtime-corejs3 so that helpers that need polyfillable APIs will reference core-js instead.
+  // if useBuiltIns is not set to 'usage', then it means users would take care of the polyfills on their own,
+  // i.e., core-js 3 is no longer needed.
+  // this extra plugin can be removed once one of the two issues resolves:
+  // https://github.com/babel/babel/issues/7597
+  // https://github.com/babel/babel/issues/9903
+  if (useBuiltIns === 'usage' && !process.env.VUE_CLI_MODERN_BUILD) {
+    const runtimeCoreJs3Path = path.dirname(require.resolve('@babel/runtime-corejs3/package.json'))
+    plugins.push([require('babel-plugin-module-resolver'), {
+      alias: {
+        '@babel/runtime': '@babel/runtime-corejs3',
+        [runtimePath]: runtimeCoreJs3Path
+      }
+    }])
+  }
 
   return {
     presets,

@@ -61,7 +61,7 @@ test('should work', async () => {
     done = resolve
   })
   // enable lintOnSave
-  await write('vue.config.js', 'module.exports = { lintOnSave: true }')
+  await write('vue.config.js', "module.exports = { lintOnSave: 'default' }")
   // write invalid file
   const app = await read('src/App.vue')
   const updatedApp = app.replace(/;/, '')
@@ -74,7 +74,7 @@ test('should work', async () => {
     data = data.toString()
     if (isFirstMsg) {
       // should fail on start
-      expect(data).toMatch(/Compiled with \d warning/)
+      expect(data).toMatch(/Failed to compile with \d error/)
       isFirstMsg = false
 
       // fix it
@@ -119,4 +119,24 @@ test('should not fix with --no-fix option', async () => {
 
   // files should not have been fixed
   expect(await read('src/main.js')).not.toMatch(';')
+})
+
+// #3167, #3243
+test('should not throw when src folder is ignored by .eslintignore', async () => {
+  const project = await create('eslint-ignore', {
+    plugins: {
+      '@vue/cli-plugin-babel': {},
+      '@vue/cli-plugin-eslint': {
+        config: 'airbnb',
+        lintOn: 'commit'
+      }
+    },
+    useConfigFiles: true
+  })
+
+  const { write, run } = project
+  await write('.eslintignore', 'src\n.eslintrc.js')
+
+  // should not throw
+  await run('vue-cli-service lint')
 })

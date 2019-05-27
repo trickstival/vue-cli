@@ -13,15 +13,14 @@ module.exports = (api, { config, lintOn = [] }, _, invoking) => {
       lint: 'vue-cli-service lint'
     },
     eslintConfig,
-    // TODO:
-    // Move these dependencies to package.json in v4.
-    // Now in v3 we have to add redundant eslint related dependencies
-    // in order to keep compatibility with v3.0.x users who defaults to ESlint v4.
     devDependencies: {
-      'babel-eslint': '^10.0.1',
-      'eslint': '^5.8.0',
-      'eslint-plugin-vue': '^5.0.0-0'
+      'eslint': '^5.16.0',
+      'eslint-plugin-vue': '^5.0.0'
     }
+  }
+
+  if (!api.hasPlugin('typescript')) {
+    pkg.devDependencies['babel-eslint'] = '^10.0.1'
   }
 
   const injectEditorConfig = (config) => {
@@ -54,7 +53,7 @@ module.exports = (api, { config, lintOn = [] }, _, invoking) => {
   } else if (config === 'prettier') {
     eslintConfig.extends.push('@vue/prettier')
     Object.assign(pkg.devDependencies, {
-      '@vue/eslint-config-prettier': '^4.0.0'
+      '@vue/eslint-config-prettier': '^4.0.1'
     })
     // prettier & default config do not have any style rules
     // so no need to generate an editorconfig file
@@ -71,14 +70,13 @@ module.exports = (api, { config, lintOn = [] }, _, invoking) => {
 
   if (lintOn.includes('commit')) {
     Object.assign(pkg.devDependencies, {
-      'lint-staged': '^7.2.2'
+      'lint-staged': '^8.1.5'
     })
     pkg.gitHooks = {
       'pre-commit': 'lint-staged'
     }
     pkg['lint-staged'] = {
-      '*.js': ['vue-cli-service lint', 'git add'],
-      '*.vue': ['vue-cli-service lint', 'git add']
+      '*.{js,vue}': ['vue-cli-service lint', 'git add']
     }
   }
 
@@ -113,11 +111,11 @@ const applyTS = module.exports.applyTS = api => {
     eslintConfig: {
       extends: ['@vue/typescript'],
       parserOptions: {
-        parser: 'typescript-eslint-parser'
+        parser: '@typescript-eslint/parser'
       }
     },
     devDependencies: {
-      '@vue/eslint-config-typescript': '^3.1.0'
+      '@vue/eslint-config-typescript': '^4.0.0'
     }
   })
 }

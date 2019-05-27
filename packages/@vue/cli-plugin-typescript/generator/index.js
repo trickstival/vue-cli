@@ -9,15 +9,15 @@ module.exports = (api, {
 
   api.extendPackage({
     devDependencies: {
-      typescript: '^3.0.0'
+      typescript: '^3.4.5'
     }
   })
 
   if (classComponent) {
     api.extendPackage({
       dependencies: {
-        'vue-class-component': '^6.0.0',
-        'vue-property-decorator': '^7.0.0'
+        'vue-class-component': '^7.0.2',
+        'vue-property-decorator': '^8.1.0'
       }
     })
   }
@@ -40,7 +40,7 @@ module.exports = (api, {
     if (lintOn.includes('commit')) {
       api.extendPackage({
         devDependencies: {
-          'lint-staged': '^7.2.2'
+          'lint-staged': '^8.1.5'
         },
         gitHooks: {
           'pre-commit': 'lint-staged'

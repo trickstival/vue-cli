@@ -37,7 +37,7 @@ module.exports = (api, options) => {
         rawArgs.push('--config', require.resolve('./nightwatch.config.js'))
       }
 
-      if (rawArgs.indexOf('--env') === -1) {
+      if (rawArgs.indexOf('--env') === -1 && rawArgs.indexOf('-e') === -1) {
         rawArgs.push('--env', 'chrome')
       }
 
@@ -57,13 +57,6 @@ module.exports = (api, options) => {
 
       return runner
     })
-  })
-
-  // TODO remove in RC
-  api.registerCommand('e2e', (args, rawArgv) => {
-    const { warn } = require('@vue/cli-shared-utils')
-    warn(`Deprecation Warning: "vue-cli-service e2e" has been renamed to "vue-cli-service test:e2e".`)
-    return api.service.run('test:e2e', args, rawArgv)
   })
 }
 

@@ -24,7 +24,7 @@ module.exports = (api, options) => {
     const outputDir = api.resolve(options.outputDir)
 
     // code splitting
-    if (isProd && !process.env.CYPRESS_ENV) {
+    if (process.env.NODE_ENV !== 'test') {
       webpackConfig
         .optimization.splitChunks({
           cacheGroups: {
@@ -88,7 +88,7 @@ module.exports = (api, options) => {
             files: assets,
             options: pluginOptions
           }
-        }, resolveClientEnv(options, true /* raw */))
+        }, resolveClientEnv(options))
       }
     }
 
@@ -140,7 +140,7 @@ module.exports = (api, options) => {
     const multiPageConfig = options.pages
     const htmlPath = api.resolve('public/index.html')
     const defaultHtmlPath = path.resolve(__dirname, 'index-default.html')
-    const publicCopyIgnore = ['index.html', '.DS_Store']
+    const publicCopyIgnore = ['.DS_Store']
 
     if (!multiPageConfig) {
       // default, single page setup.
@@ -199,7 +199,8 @@ module.exports = (api, options) => {
         }
 
         // inject entry
-        webpackConfig.entry(name).add(api.resolve(entry))
+        const entries = Array.isArray(entry) ? entry : [entry]
+        webpackConfig.entry(name).merge(entries.map(e => api.resolve(e)))
 
         // resolve page index template
         const hasDedicatedTemplate = fs.existsSync(api.resolve(template))
@@ -268,7 +269,7 @@ module.exports = (api, options) => {
           .use(require('../webpack/CorsPlugin'), [{
             crossorigin: options.crossorigin,
             integrity: options.integrity,
-            baseUrl: options.baseUrl
+            publicPath: options.publicPath
           }])
     }
 

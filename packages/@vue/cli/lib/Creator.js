@@ -3,6 +3,7 @@ const chalk = require('chalk')
 const debug = require('debug')
 const execa = require('execa')
 const inquirer = require('inquirer')
+const semver = require('semver')
 const EventEmitter = require('events')
 const Generator = require('./Generator')
 const cloneDeep = require('lodash.clonedeep')
@@ -32,6 +33,7 @@ const {
   hasGit,
   hasProjectGit,
   hasYarn,
+  hasPnpm3OrLater,
   logWithSpinner,
   stopSpinner,
   exit,
@@ -89,14 +91,16 @@ module.exports = class Creator extends EventEmitter {
     // inject core service
     preset.plugins['@vue/cli-service'] = Object.assign({
       projectName: name
-    }, preset, {
-      bare: cliOptions.bare
-    })
+    }, preset)
+    if (cliOptions.bare) {
+      preset.plugins['@vue/cli-service'].bare = true
+    }
 
     const packageManager = (
       cliOptions.packageManager ||
       loadOptions().packageManager ||
-      (hasYarn() ? 'yarn' : 'npm')
+      (hasYarn() ? 'yarn' : null) ||
+      (hasPnpm3OrLater() ? 'pnpm' : 'npm')
     )
 
     await clearConsole()
@@ -104,7 +108,13 @@ module.exports = class Creator extends EventEmitter {
     this.emit('creation', { event: 'creating' })
 
     // get latest CLI version
-    const { latest } = await getVersions()
+    const { current, latest } = await getVersions()
+    let latestMinor = `${semver.major(latest)}.${semver.minor(latest)}.0`
+
+    // if using `next` branch of cli
+    if (semver.gt(current, latest) && semver.prerelease(current)) {
+      latestMinor = current
+    }
     // generate package.json with plugin dependencies
     const pkg = {
       name,
@@ -117,9 +127,13 @@ module.exports = class Creator extends EventEmitter {
       if (preset.plugins[dep]._isPreset) {
         return
       }
+
+      // Note: the default creator includes no more than `@vue/cli-*` & `@vue/babel-preset-env`,
+      // so it is fine to only test `@vue` prefix.
+      // Other `@vue/*` packages' version may not be in sync with the cli itself.
       pkg.devDependencies[dep] = (
         preset.plugins[dep].version ||
-        ((/^@vue/.test(dep) && latest[dep]) ? `^${latest[dep]}` : `latest`)
+        ((/^@vue/.test(dep)) ? `^${latestMinor}` : `latest`)
       )
     })
     // write package.json
@@ -129,7 +143,7 @@ module.exports = class Creator extends EventEmitter {
 
     // intilaize git repository before installing deps
     // so that vue-cli-service can setup git hooks.
-    const shouldInitGit = await this.shouldInitGit(cliOptions)
+    const shouldInitGit = this.shouldInitGit(cliOptions)
     if (shouldInitGit) {
       logWithSpinner(`🗃`, `Initializing git repository...`)
       this.emit('creation', { event: 'git-init' })
@@ -184,6 +198,13 @@ module.exports = class Creator extends EventEmitter {
       'README.md': generateReadme(generator.pkg, packageManager)
     })
 
+    // generate a .npmrc file for pnpm, to persist the `shamefully-flatten` flag
+    if (packageManager === 'pnpm') {
+      await writeFileTree(context, {
+        '.npmrc': 'shamefully-flatten=true\n'
+      })
+    }
+
     // commit initial state
     let gitCommitFailed = false
     if (shouldInitGit) {
@@ -204,11 +225,13 @@ module.exports = class Creator extends EventEmitter {
     stopSpinner()
     log()
     log(`🎉  Successfully created project ${chalk.yellow(name)}.`)
-    log(
-      `👉  Get started with the following commands:\n\n` +
-      (this.context === process.cwd() ? `` : chalk.cyan(` ${chalk.gray('$')} cd ${name}\n`)) +
-      chalk.cyan(` ${chalk.gray('$')} ${packageManager === 'yarn' ? 'yarn serve' : 'npm run serve'}`)
-    )
+    if (!cliOptions.skipGetStarted) {
+      log(
+        `👉  Get started with the following commands:\n\n` +
+        (this.context === process.cwd() ? `` : chalk.cyan(` ${chalk.gray('$')} cd ${name}\n`)) +
+        chalk.cyan(` ${chalk.gray('$')} ${packageManager === 'yarn' ? 'yarn serve' : packageManager === 'pnpm' ? 'pnpm run serve' : 'npm run serve'}`)
+      )
+    }
     log()
     this.emit('creation', { event: 'done' })
 
@@ -402,23 +425,36 @@ module.exports = class Creator extends EventEmitter {
 
     // ask for packageManager once
     const savedOptions = loadOptions()
-    if (!savedOptions.packageManager && hasYarn()) {
+    if (!savedOptions.packageManager && (hasYarn() || hasPnpm3OrLater())) {
+      const packageManagerChoices = []
+
+      if (hasYarn()) {
+        packageManagerChoices.push({
+          name: 'Use Yarn',
+          value: 'yarn',
+          short: 'Yarn'
+        })
+      }
+
+      if (hasPnpm3OrLater()) {
+        packageManagerChoices.push({
+          name: 'Use PNPM',
+          value: 'pnpm',
+          short: 'PNPM'
+        })
+      }
+
+      packageManagerChoices.push({
+        name: 'Use NPM',
+        value: 'npm',
+        short: 'NPM'
+      })
+
       outroPrompts.push({
         name: 'packageManager',
         type: 'list',
         message: 'Pick the package manager to use when installing dependencies:',
-        choices: [
-          {
-            name: 'Use Yarn',
-            value: 'yarn',
-            short: 'Yarn'
-          },
-          {
-            name: 'Use NPM',
-            value: 'npm',
-            short: 'NPM'
-          }
-        ]
+        choices: packageManagerChoices
       })
     }
 
@@ -443,7 +479,7 @@ module.exports = class Creator extends EventEmitter {
     return prompts
   }
 
-  async shouldInitGit (cliOptions) {
+  shouldInitGit (cliOptions) {
     if (!hasGit()) {
       return false
     }

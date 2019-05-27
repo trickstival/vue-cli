@@ -90,7 +90,7 @@ test('invoke with ts', async () => {
   await project.write('package.json', JSON.stringify(pkg, null, 2))
 
   // mock existing vue.config.js
-  await project.write('vue.config.js', `module.exports = { lintOnSave: true }`)
+  await project.write('vue.config.js', `module.exports = { lintOnSave: 'default' }`)
 
   const eslintrc = parseJS(await project.read('.eslintrc.js'))
   expect(eslintrc).toEqual(Object.assign({}, baseESLintConfig, {
@@ -103,7 +103,7 @@ test('invoke with ts', async () => {
   expect(updatedESLintrc).toEqual(Object.assign({}, baseESLintConfig, {
     extends: ['plugin:vue/essential', 'eslint:recommended', '@vue/typescript'],
     parserOptions: {
-      parser: 'typescript-eslint-parser'
+      parser: '@typescript-eslint/parser'
     }
   }))
 })

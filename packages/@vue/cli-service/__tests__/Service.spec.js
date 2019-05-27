@@ -6,6 +6,8 @@ const fs = require('fs')
 const path = require('path')
 const Service = require('../lib/Service')
 
+const { logs } = require('@vue/cli-shared-utils')
+
 const mockPkg = json => {
   fs.writeFileSync('/package.json', JSON.stringify(json, null, 2))
 }
@@ -62,7 +64,7 @@ test('loading plugins from package.json', () => {
   mockPkg({
     devDependencies: {
       'bar': '^1.0.0',
-      '@vue/cli-plugin-babel': '^3.1.0',
+      '@vue/cli-plugin-babel': '^4.0.0-alpha.1',
       'vue-cli-plugin-foo': '^1.0.0'
     }
   })
@@ -75,43 +77,66 @@ test('loading plugins from package.json', () => {
 test('load project options from package.json', () => {
   mockPkg({
     vue: {
-      lintOnSave: true
+      lintOnSave: 'default'
     }
   })
   const service = createMockService()
-  expect(service.projectOptions.lintOnSave).toBe(true)
+  expect(service.projectOptions.lintOnSave).toBe('default')
 })
 
-test('handle option baseUrl and outputDir correctly', () => {
-  mockPkg({
-    vue: {
-      baseUrl: 'https://foo.com/bar',
-      outputDir: '/public/'
-    }
-  })
-  const service = createMockService()
-  expect(service.projectOptions.baseUrl).toBe('https://foo.com/bar/')
-  expect(service.projectOptions.outputDir).toBe('/public')
-})
-
-test('normalize baseUrl when relative', () => {
+test('deprecate baseUrl', () => {
   mockPkg({
     vue: {
       baseUrl: './foo/bar'
     }
   })
-  const service = createMockService()
-  expect(service.projectOptions.baseUrl).toBe('foo/bar/')
+  createMockService()
+  expect(logs.warn.some(([msg]) => msg.match('is deprecated now, please use "publicPath" instead.')))
 })
 
-test('keep baseUrl when empty', () => {
+test('discard baseUrl if publicPath also exists', () => {
   mockPkg({
     vue: {
-      baseUrl: ''
+      baseUrl: '/foo/barbase/',
+      publicPath: '/foo/barpublic/'
+    }
+  })
+
+  const service = createMockService()
+  expect(logs.warn.some(([msg]) => msg.match('"baseUrl" will be ignored in favor of "publicPath"')))
+  expect(service.projectOptions.publicPath).toBe('/foo/barpublic/')
+})
+
+test('handle option publicPath and outputDir correctly', () => {
+  mockPkg({
+    vue: {
+      publicPath: 'https://foo.com/bar',
+      outputDir: '/public/'
     }
   })
   const service = createMockService()
-  expect(service.projectOptions.baseUrl).toBe('')
+  expect(service.projectOptions.publicPath).toBe('https://foo.com/bar/')
+  expect(service.projectOptions.outputDir).toBe('/public')
+})
+
+test('normalize publicPath when relative', () => {
+  mockPkg({
+    vue: {
+      publicPath: './foo/bar'
+    }
+  })
+  const service = createMockService()
+  expect(service.projectOptions.publicPath).toBe('foo/bar/')
+})
+
+test('keep publicPath when empty', () => {
+  mockPkg({
+    vue: {
+      publicPath: ''
+    }
+  })
+  const service = createMockService()
+  expect(service.projectOptions.publicPath).toBe('')
 })
 
 test('load project options from vue.config.js', () => {
@@ -119,7 +144,7 @@ test('load project options from vue.config.js', () => {
   fs.writeFileSync('/vue.config.js', `module.exports = { lintOnSave: false }`)
   mockPkg({
     vue: {
-      lintOnSave: true
+      lintOnSave: 'default'
     }
   })
   const service = createMockService()
@@ -127,6 +152,37 @@ test('load project options from vue.config.js', () => {
   delete process.env.VUE_CLI_SERVICE_CONFIG_PATH
   // vue.config.js has higher priority
   expect(service.projectOptions.lintOnSave).toBe(false)
+})
+
+test('load project options from vue.config.js', () => {
+  process.env.VUE_CLI_SERVICE_CONFIG_PATH = `/vue.config.js`
+  fs.writeFileSync('/vue.config.js', '')  // only to ensure fs.existsSync returns true
+  jest.mock('/vue.config.js', () => function () { return { lintOnSave: false } }, { virtual: true })
+  mockPkg({
+    vue: {
+      lintOnSave: 'default'
+    }
+  })
+  const service = createMockService()
+  fs.unlinkSync('/vue.config.js')
+  delete process.env.VUE_CLI_SERVICE_CONFIG_PATH
+  // vue.config.js has higher priority
+  expect(service.projectOptions.lintOnSave).toBe(false)
+})
+
+test('api: assertVersion', () => {
+  const plugin = {
+    id: 'test-assertVersion',
+    apply: api => {
+      expect(() => api.assertVersion(4)).not.toThrow()
+      expect(() => api.assertVersion('^4.0.0-0')).not.toThrow()
+      // expect(() => api.assertVersion('>= 4')).not.toThrow()
+
+      expect(() => api.assertVersion(4.1)).toThrow('Expected string or integer value')
+      expect(() => api.assertVersion('^100')).toThrow('Require @vue/cli-service "^100"')
+    }
+  }
+  createMockService([plugin], true /* init */)
 })
 
 test('api: registerCommand', () => {
@@ -253,6 +309,28 @@ test('api: configureWebpack preserve ruleNames', () => {
 
   const config = service.resolveWebpackConfig()
   expect(config.module.rules[0].__ruleNames).toEqual(['js'])
+})
+
+test('internal: should correctly set VUE_CLI_ENTRY_FILES', () => {
+  const service = createMockService([{
+    id: 'test',
+    apply: api => {
+      api.configureWebpack(config => {
+        config.entry = {
+          page1: './src/page1.js',
+          page2: './src/page2.js'
+        }
+      })
+    }
+  }])
+
+  service.resolveWebpackConfig()
+  expect(process.env.VUE_CLI_ENTRY_FILES).toEqual(
+    JSON.stringify([
+      path.resolve('/', './src/page1.js'),
+      path.resolve('/', './src/page2.js')
+    ])
+  )
 })
 
 test('api: configureDevServer', () => {

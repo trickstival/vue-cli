@@ -12,7 +12,7 @@ You can select pre-processors (Sass/Less/Stylus) when creating the project. If y
 
 ``` bash
 # Sass
-npm install -D sass-loader node-sass
+npm install -D sass-loader sass
 
 # Less
 npm install -D less-loader less
@@ -28,6 +28,14 @@ Then you can import the corresponding file types, or use them in `*.vue` files w
 $color: red;
 </style>
 ```
+
+::: tip A Tip on Sass Performance
+Note that when using Dart Sass, **synchronous compilation is twice as fast as asynchronous compilation** by default, due to the overhead of asynchronous callbacks. To avoid this overhead, you can use the [fibers](https://www.npmjs.com/package/fibers) package to call asynchronous importers from the synchronous code path. To enable this, simply install `fibers` as a project dependency:
+```
+npm install -D fibers
+```
+Please also be aware, as it's a native module, there may be compatibility issues vary on the OS and build environment. In that case, please run `npm uninstall -D fibers` to fix the problem.
+:::
 
 ### Automatic imports
 
@@ -110,7 +118,7 @@ module.exports = {
 
 ## Passing Options to Pre-Processor Loaders
 
-Sometimes you may want to pass options to the pre-processor's webpack loader. You can do that using the `css.loaderOptions` option in `vue.config.js`. For example, to pass some shared global variables to all your Sass styles:
+Sometimes you may want to pass options to the pre-processor's webpack loader. You can do that using the `css.loaderOptions` option in `vue.config.js`. For example, to pass some shared global variables to all your Sass/Less styles:
 
 ``` js
 // vue.config.js
@@ -121,14 +129,22 @@ module.exports = {
       sass: {
         // @/ is an alias to src/
         // so this assumes you have a file named `src/variables.scss`
-        data: `@import "@/variables.scss";`
+        data: `@import "~@/variables.scss";`
+      },
+      // pass Less.js Options to less-loader
+      less:{
+        // http://lesscss.org/usage/#less-options-strict-units `Global Variables`
+        // `primary` is global variables fields name
+        globalVars: {
+          primary: '#fff'
+        }
       }
     }
   }
 }
 ```
 
-Loaders can be configured via `loaderOptions` include:
+Loaders which can be configured via `loaderOptions` include:
 
 - [css-loader](https://github.com/webpack-contrib/css-loader)
 - [postcss-loader](https://github.com/postcss/postcss-loader)

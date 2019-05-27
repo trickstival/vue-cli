@@ -100,7 +100,7 @@ test('typescript', async () => {
     '@vue/typescript'
   ])
   expect(pkg.eslintConfig.parserOptions).toEqual({
-    parser: 'typescript-eslint-parser'
+    parser: '@typescript-eslint/parser'
   })
   expect(pkg.devDependencies).toHaveProperty('@vue/eslint-config-prettier')
   expect(pkg.devDependencies).toHaveProperty('@vue/eslint-config-typescript')
@@ -129,8 +129,7 @@ test('lint on commit', async () => {
   expect(pkg.gitHooks['pre-commit']).toBe('lint-staged')
   expect(pkg.devDependencies).toHaveProperty('lint-staged')
   expect(pkg['lint-staged']).toEqual({
-    '*.js': ['vue-cli-service lint', 'git add'],
-    '*.vue': ['vue-cli-service lint', 'git add']
+    '*.{js,vue}': ['vue-cli-service lint', 'git add']
   })
   expect(pkg.vue).toEqual({
     lintOnSave: false
@@ -163,3 +162,18 @@ test('append to existing .editorconfig', async () => {
   expect(editorconfig).toMatch('root = true')
   expect(editorconfig).toMatch('[*.{js,jsx,ts,tsx,vue}]')
 })
+
+test('airbnb config + typescript + unit-mocha', async () => {
+  await create('eslint-airbnb-typescript', {
+    plugins: {
+      '@vue/cli-plugin-eslint': {
+        config: 'airbnb',
+        lintOn: 'commit'
+      },
+      '@vue/cli-plugin-typescript': {
+        classComponent: true
+      },
+      '@vue/cli-plugin-unit-mocha': {}
+    }
+  })
+}, 30000)

@@ -2,13 +2,13 @@
 
 ## General Guidelines
 
-If you are using Vue CLI along with a backend framework that handles static assets as part of its deployment, all you need to do is making sure Vue CLI generates the built files in the correct location, and then follow the deployment instruction of your backend framework.
+If you are using Vue CLI along with a backend framework that handles static assets as part of its deployment, all you need to do is make sure Vue CLI generates the built files in the correct location, and then follow the deployment instruction of your backend framework.
 
-If you are developing your frontend app separately from your backend - i.e. your backend exposes an API for your frontend to talk to, then your frontend is essentially a purely static app. You can deploy the built content in the `dist` directory to any static file server, but make sure to set the correct [baseUrl](../config/#baseurl).
+If you are developing your frontend app separately from your backend - i.e. your backend exposes an API for your frontend to talk to, then your frontend is essentially a purely static app. You can deploy the built content in the `dist` directory to any static file server, but make sure to set the correct [publicPath](../config/#publicpath).
 
 ### Previewing Locally
 
-The `dist` directory is meant to be served by an HTTP server (unless you've configured `baseUrl` to be a relative value), so it will not work if you open `dist/index.html` directly over `file://` protocol. The easiest way to preview your production build locally is using a Node.js static file server, for example [serve](https://github.com/zeit/serve):
+The `dist` directory is meant to be served by an HTTP server (unless you've configured `publicPath` to be a relative value), so it will not work if you open `dist/index.html` directly over `file://` protocol. The easiest way to preview your production build locally is using a Node.js static file server, for example [serve](https://github.com/zeit/serve):
 
 ``` bash
 npm install -g serve
@@ -35,15 +35,15 @@ If you are using the PWA plugin, your app must be served over HTTPS so that [Ser
 
 ### GitHub Pages
 
-1. Set correct `baseUrl` in `vue.config.js`.
+1. Set correct `publicPath` in `vue.config.js`.
 
-    If you are deploying to `https://<USERNAME>.github.io/`, you can omit `baseUrl` as it defaults to `"/"`.
+    If you are deploying to `https://<USERNAME>.github.io/`, you can omit `publicPath` as it defaults to `"/"`.
 
-    If you are deploying to `https://<USERNAME>.github.io/<REPO>/`, (i.e. your repository is at `https://github.com/<USERNAME>/<REPO>`), set `baseUrl` to `"/<REPO>/"`. For example, if your repo name is "my-project", your `vue.config.js` should look like this:
+    If you are deploying to `https://<USERNAME>.github.io/<REPO>/`, (i.e. your repository is at `https://github.com/<USERNAME>/<REPO>`), set `publicPath` to `"/<REPO>/"`. For example, if your repo name is "my-project", your `vue.config.js` should look like this:
 
     ``` js
     module.exports = {
-      baseUrl: process.env.NODE_ENV === 'production'
+      publicPath: process.env.NODE_ENV === 'production'
         ? '/my-project/'
         : '/'
     }
@@ -112,7 +112,7 @@ Typically, your static website will be hosted on https://yourUserName.gitlab.io/
 // make sure you update `yourProjectName` with the name of your GitLab project
 
 module.exports = {
-  baseUrl: process.env.NODE_ENV === 'production'
+  publicPath: process.env.NODE_ENV === 'production'
     ? '/yourProjectName/'
     : '/'
 }
@@ -132,6 +132,15 @@ Commit both the `.gitlab-ci.yml` and `vue.config.js` files before pushing to you
 2. Hit the deploy button!
 
 Also checkout [vue-cli-plugin-netlify-lambda](https://github.com/netlify/vue-cli-plugin-netlify-lambda).
+
+In order to receive direct hits using `history mode` on Vue Router, you need to create a file called `_redirects` under `/public` with the following content:
+
+```
+# Netlify settings for single-page application
+/*    /index.html   200
+```
+
+More information on [Netlify redirects documentation](https://www.netlify.com/docs/redirects/#history-pushstate-and-single-page-apps).
 
 ### Amazon S3
 
@@ -282,11 +291,11 @@ Verify your project is successfully published by Surge by visiting `myawesomepro
 
 1. As described in the [Bitbucket documentation](https://confluence.atlassian.com/bitbucket/publishing-a-website-on-bitbucket-cloud-221449776.html) you need to create a repository named exactly `<USERNAME>.bitbucket.io`.
 
-2. It is possible to publish to a subfolder of the main repository, for instance if you want to have multiple websites. In that case set correct `baseUrl` in `vue.config.js`.
+2. It is possible to publish to a subfolder of the main repository, for instance if you want to have multiple websites. In that case set correct `publicPath` in `vue.config.js`.
 
-    If you are deploying to `https://<USERNAME>.bitbucket.io/`, you can omit `baseUrl` as it defaults to `"/"`.
+    If you are deploying to `https://<USERNAME>.bitbucket.io/`, you can omit `publicPath` as it defaults to `"/"`.
 
-    If you are deploying to `https://<USERNAME>.bitbucket.io/<SUBFOLDER>/`, set `baseUrl` to `"/<SUBFOLDER>/"`. In this case the directory structure of the repository should reflect the url structure, for instance the repository should have a `/<SUBFOLDER>` directory.
+    If you are deploying to `https://<USERNAME>.bitbucket.io/<SUBFOLDER>/`, set `publicPath` to `"/<SUBFOLDER>/"`. In this case the directory structure of the repository should reflect the url structure, for instance the repository should have a `/<SUBFOLDER>` directory.
 
 3. Inside your project, create `deploy.sh` with the following content and run it to deploy:
 
@@ -309,4 +318,93 @@ Verify your project is successfully published by Surge by visiting `myawesomepro
     git push -f git@bitbucket.org:<USERNAME>/<USERNAME>.bitbucket.io.git master
 
     cd -
+    ```
+
+
+### Docker (Nginx)
+
+Deploy your application using nginx inside of a docker container.
+
+1. Install [docker](https://www.docker.com/get-started)
+
+2. Create a `Dockerfile` file in the root of your project.
+
+    ```Dockerfile
+    FROM node:10
+    COPY ./ /app
+    WORKDIR /app
+    RUN npm install && npm run build
+
+    FROM nginx
+    RUN mkdir /app
+    COPY --from=0 /app/dist /app
+    COPY nginx.conf /etc/nginx/nginx.conf
+    ```
+
+3. Create a `.dockerignore` file in the root of your project
+
+    Setting up the `.dockerignore` file prevents `node_modules` and any intermediate build artifacts from being copied to the image which can cause issues during building.
+
+    ```gitignore
+    **/node_modules
+    **/dist
+    ```
+
+4. Create a `nginx.conf` file in the root of your project
+
+    `Nginx` is an HTTP(s) server that will run in your docker container. It uses a configuration file to determine how to serve content/which ports to listen on/etc. See the [nginx configuration documentation](https://www.nginx.com/resources/wiki/start/topics/examples/full/) for an example of all of the possible configuration options.
+
+    The following is a simple `nginx` configuration that serves your vue project on port `80`. The root `index.html` is served for `page not found` / `404` errors which allows us to use `pushState()` based routing.
+
+    ```text
+    user  nginx;
+    worker_processes  1;
+    error_log  /var/log/nginx/error.log warn;
+    pid        /var/run/nginx.pid;
+    events {
+      worker_connections  1024;
+    }
+    http {
+      include       /etc/nginx/mime.types;
+      default_type  application/octet-stream;
+      log_format  main  '$remote_addr - $remote_user [$time_local] "$request" '
+                        '$status $body_bytes_sent "$http_referer" '
+                        '"$http_user_agent" "$http_x_forwarded_for"';
+      access_log  /var/log/nginx/access.log  main;
+      sendfile        on;
+      keepalive_timeout  65;
+      server {
+        listen       80;
+        server_name  localhost;
+        location / {
+          root   /app;
+          index  index.html;
+          try_files $uri $uri/ /index.html;
+        }
+        error_page   500 502 503 504  /50x.html;
+        location = /50x.html {
+          root   /usr/share/nginx/html;
+        }
+      }
+    }
+    ```
+
+5. Build your docker image
+
+    ```bash
+    docker build . -t my-app
+    # Sending build context to Docker daemon  884.7kB
+    # ...
+    # Successfully built 4b00e5ee82ae
+    # Successfully tagged my-app:latest
+    ```
+
+6. Run your docker image
+
+    This build is based on the official `nginx` image so log redirection has already been set up and self daemonizing has been turned off. Some other default settings have been setup to improve running nginx in a docker container. See the [nginx docker repo](https://hub.docker.com/_/nginx) for more info.
+
+    ```bash
+    docker run -d -p 8080:80 my-app
+    curl localhost:8080
+    # <!DOCTYPE html><html lang=en>...</html>
     ```
